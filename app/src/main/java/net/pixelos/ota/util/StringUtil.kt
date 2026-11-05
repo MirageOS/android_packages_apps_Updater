@@ -21,6 +21,17 @@ import com.android.settingslib.utils.StringUtil as SettingsLibStringUtil
 
 object StringUtil {
 
+    private val LegacyBrand = Regex("(?i)pixel\\s*os[\\s_\\-:]*")
+
+    /**
+     * Version text for display. The layouts already prefix it with the brand name, so a leftover
+     * "PixelOS" coming from the OTA json or from ro.custom.version is dropped here. Only the text
+     * on screen changes; the stored version and every comparison stay as they were.
+     */
+    @JvmStatic
+    fun displayVersion(version: String): String =
+        version.replace(LegacyBrand, "").trim().ifEmpty { version }
+
     @JvmStatic
     fun getTimeLocalized(context: Context, unixTimestamp: Long): String =
         DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)

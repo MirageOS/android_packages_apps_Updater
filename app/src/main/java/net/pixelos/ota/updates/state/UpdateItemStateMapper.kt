@@ -168,7 +168,7 @@ class UpdateItemStateMapper(
             buildDate = StringUtil.formatBuildDate(context, update.timestamp),
             buildVersion = context.getString(
                 R.string.list_build_version,
-                update.version,
+                StringUtil.displayVersion(update.version),
             ),
             status = state.titleRes?.let { context.getString(it) } ?: "",
             fileSize = Formatter.formatShortFileSize(context, update.fileSize),

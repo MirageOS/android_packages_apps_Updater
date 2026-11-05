@@ -205,7 +205,7 @@ class UpdateActionHandler(
         )
         val buildInfoText = activity.getString(
             R.string.list_build_version_date,
-            update.version,
+            StringUtil.displayVersion(update.version),
             buildDate,
         )
         showDialog(
