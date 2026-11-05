@@ -148,13 +148,18 @@
     <!-- Banner -->
     <string name="brand_name" translatable="false">MirageOS</string>
     <string name="header_build_version" translatable="false">MirageOS <xliff:g id="version" example="17.0">%1$s</xliff:g></string>
+    <string name="maintainer_unknown">Not set</string>
+    <string name="build_official">Official build</string>
+    <string name="build_unofficial">Unofficial build</string>
+    <string name="android_version_title">Android</string>
+    <string name="last_checked_title">Last checked</string>
+    <string name="changelog_title">What\'s new</string>
     <string name="build_date">Build date</string>
     <string name="security_update">Security update</string>
     <string name="report_issues">Report issues</string>
     <!-- Empty by default; products may overlay a canonical issue-reporting URL. -->
     <string name="report_issue_url" translatable="false" />
     <string name="header_review_updates">Review updates and recent changes on</string>
-    <string name="header_download_url" translatable="false">download.pixelos.net</string>
     <string name="found_bug">Found a bug? Report it with our bug report guide:</string>
 
     <string name="updates_zero_state_title">No updates available</string>

@@ -10,15 +10,23 @@ package net.pixelos.ota.ui
 import android.content.Intent
 import android.text.format.DateFormat
 import android.text.format.DateUtils
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -29,7 +37,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,11 +63,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.android.settingslib.spa.debug.UiModePreviews
 import com.android.settingslib.spa.framework.theme.SettingsTheme
@@ -68,10 +86,18 @@ import net.pixelos.ota.util.StringUtil
 import java.util.Date
 
 private val ContentMaxWidth = 560.dp
-private val HorizontalPadding = 24.dp
-private val IconSize = 48.dp
+private val PagePadding = 16.dp
+private val CardCorner = 28.dp
+private val CardPadding = 20.dp
+private val CardSpacing = 8.dp
+private val TileMinHeight = 148.dp
 private val ButtonHeight = 56.dp
 
+/**
+ * System update screen. Same visual language as the About phone / Personalise screens in
+ * Settings: wallpaper banner on top, then rounded cards with a shape chip and a translucent shape
+ * in the corner.
+ */
 @Composable
 fun SystemUpdateScreen(
     headline: String,
@@ -93,9 +119,16 @@ fun SystemUpdateScreen(
     // The bottom bar only offers a check while no update is displayed.
     val showCheckButton = !isBusy && updateItem == null
 
+    val statusIcon = when {
+        supportingTextIsError -> Icons.Outlined.ErrorOutline
+        isBusy -> Icons.Outlined.Sync
+        updateItem != null -> SystemUpdateIcon
+        else -> Icons.Outlined.CheckCircle
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             SystemUpdateTopBar(
                 onBackClick = onBackClick,
@@ -122,28 +155,6 @@ fun SystemUpdateScreen(
             }
         },
     ) { paddingValues ->
-        if (isBusy) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Column(modifier = Modifier.widthIn(max = ContentMaxWidth)) {
-                    ScreenHeader(headline)
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    UpdateCheckAnimation()
-                }
-            }
-            return@Scaffold
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -151,136 +162,343 @@ fun SystemUpdateScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(modifier = Modifier.widthIn(max = ContentMaxWidth)) {
-                ScreenHeader(headline)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = ContentMaxWidth)
+                    .padding(horizontal = PagePadding, vertical = CardSpacing),
+                verticalArrangement = Arrangement.spacedBy(CardSpacing),
+            ) {
+                UpdateBanner()
 
-                supportingText?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (supportingTextIsError) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.padding(
-                            start = HorizontalPadding,
-                            top = 32.dp,
-                            end = HorizontalPadding,
-                        ),
-                    )
+                StatusCard(
+                    headline = headline,
+                    supportingText = supportingText,
+                    supportingTextIsError = supportingTextIsError,
+                    icon = statusIcon,
+                )
+
+                if (isBusy) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = CardSpacing),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        UpdateCheckAnimation()
+                    }
+                } else {
+                    if (showDeviceInfo) {
+                        DeviceInfoTiles(lastCheckedTimestamp = lastCheckedTimestamp)
+                    }
+                    updateItem?.let { item ->
+                        UpdateDetails(item = item, changelogState = changelogState)
+                    }
                 }
 
-                if (showDeviceInfo) {
-                    DeviceInfoText(
-                        modifier = Modifier.padding(
-                            start = HorizontalPadding,
-                            top = 32.dp,
-                            end = HorizontalPadding,
-                        ),
-                    )
-                }
+                Spacer(modifier = Modifier.height(CardSpacing))
+            }
+        }
+    }
+}
 
-                if (lastCheckedTimestamp > 0) {
-                    LastCheckedText(
-                        timestampMillis = lastCheckedTimestamp,
-                        modifier = Modifier.padding(
-                            start = HorizontalPadding,
-                            top = 24.dp,
-                            end = HorizontalPadding,
-                        ),
-                    )
-                }
+// ---------------------------------------------------------------------------------------------
+// Cards
+// ---------------------------------------------------------------------------------------------
 
-                updateItem?.let { item ->
-                    UpdateDetails(
-                        item = item,
-                        changelogState = changelogState,
-                        modifier = Modifier.padding(horizontal = HorizontalPadding),
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
+/** Card surface shared by the Personalise and About screens in Settings. */
+@Composable
+private fun SurfaceCard(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val shape = RoundedCornerShape(CardCorner)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, shape)
+            .clip(shape),
+        content = content,
+    )
+}
+
+/** Big translucent shape that peeks out of the top end corner of a card. */
+@Composable
+private fun BoxScope.CornerShape() {
+    Image(
+        painter = painterResource(R.drawable.ic_shape_flower),
+        contentDescription = null,
+        colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.secondaryContainer),
+        alpha = 0.45f,
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .offset(x = 30.dp, y = (-30).dp)
+            .size(104.dp),
+    )
+}
+
+/** Icon inside a cookie-shaped chip. */
+@Composable
+private fun ShapeChip(icon: ImageVector) {
+    Box(
+        modifier = Modifier.size(48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_shape_cookie),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.secondaryContainer),
+            modifier = Modifier.fillMaxSize(),
+        )
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+    }
+}
+
+@Composable
+private fun StatusCard(
+    headline: String,
+    supportingText: String?,
+    supportingTextIsError: Boolean,
+    icon: ImageVector,
+) {
+    SurfaceCard {
+        CornerShape()
+        Column(modifier = Modifier.padding(CardPadding)) {
+            ShapeChip(icon)
+            Text(
+                text = headline,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            supportingText?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (supportingTextIsError) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Square-ish card: chip on top, title and value at the bottom. */
+@Composable
+private fun InfoTile(
+    icon: ImageVector,
+    title: String,
+    summary: String,
+    modifier: Modifier = Modifier,
+) {
+    SurfaceCard(modifier = modifier) {
+        CornerShape()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .heightIn(min = TileMinHeight)
+                .padding(CardPadding),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            ShapeChip(icon)
+            Column(modifier = Modifier.padding(top = 12.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
         }
     }
 }
 
 @Composable
+private fun DeviceInfoTiles(lastCheckedTimestamp: Long) {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val locale = remember(context, configuration.locales) { StringUtil.getCurrentLocale(context) }
+    val securityPatch = remember(locale) {
+        runCatching {
+            StringUtil.formatSecurityPatchFullDate(context, DeviceInfoUtils.buildSecurityPatch)
+        }.getOrDefault(DeviceInfoUtils.buildSecurityPatch)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(CardSpacing),
+    ) {
+        InfoTile(
+            icon = Icons.Outlined.Android,
+            title = stringResource(R.string.android_version_title),
+            summary = DeviceInfoUtils.androidVersion,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+        )
+        InfoTile(
+            icon = Icons.Outlined.Security,
+            title = stringResource(R.string.security_update),
+            summary = securityPatch,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+        )
+    }
+
+    if (lastCheckedTimestamp > 0) {
+        LastCheckedCard(timestampMillis = lastCheckedTimestamp)
+    }
+}
+
+@Composable
+private fun LastCheckedCard(timestampMillis: Long) {
+    val context = LocalContext.current
+    val dateText = remember(timestampMillis) {
+        val date = DateUtils.formatDateTime(
+            context,
+            timestampMillis,
+            DateUtils.FORMAT_SHOW_DATE or
+                    DateUtils.FORMAT_ABBREV_MONTH or
+                    DateUtils.FORMAT_NO_YEAR,
+        )
+        val time = DateFormat.getTimeFormat(context).format(Date(timestampMillis))
+        "$date ($time)"
+    }
+
+    SurfaceCard {
+        CornerShape()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(CardPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            ShapeChip(Icons.Outlined.Schedule)
+            Column {
+                Text(
+                    text = stringResource(R.string.last_checked_title),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = dateText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Update details
+// ---------------------------------------------------------------------------------------------
+
+@Composable
 private fun UpdateDetails(
     item: UpdateItemState,
     changelogState: ChangelogState,
-    modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier) {
-        item.progress?.let { progress ->
-            UpdateProgress(progress)
-        }
+    val showsInstallInfo = item.progress == null &&
+            item.actions.primary.type in setOf(
+        UpdateActionType.START_DOWNLOAD,
+        UpdateActionType.START_INSTALL,
+    )
 
-        Text(
-            text = "${item.buildVersion} - ${item.buildDate}",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 32.dp),
-        )
-
-        when (changelogState) {
-            ChangelogState.Idle -> Unit
-            ChangelogState.Loading -> Text(
-                text = stringResource(R.string.changelog_loading),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp),
+    SurfaceCard {
+        CornerShape()
+        Column(modifier = Modifier.padding(CardPadding)) {
+            Text(
+                text = "${item.buildVersion} - ${item.buildDate}",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
             )
-            ChangelogState.Error -> Text(
-                text = stringResource(R.string.changelog_failed),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-            is ChangelogState.Loaded -> if (changelogState.markdown.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.changelog_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-            } else {
-                MarkdownText(
-                    markdown = changelogState.markdown,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-            }
-        }
-
-        val showsInstallInfo = item.progress == null &&
-                item.actions.primary.type in setOf(
-            UpdateActionType.START_DOWNLOAD,
-            UpdateActionType.START_INSTALL,
-        )
-        if (showsInstallInfo) {
-            if (item.fileSize.isNotEmpty()) {
+            if (showsInstallInfo && item.fileSize.isNotEmpty()) {
                 Text(
                     text = stringResource(R.string.list_update_size, item.fileSize),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-            }
-
-            Row(modifier = Modifier.padding(top = 24.dp)) {
-                Icon(
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = stringResource(R.string.metered_warning_footnote),
-                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
+            item.progress?.let { progress ->
+                UpdateProgress(progress)
+            }
+        }
+    }
+
+    SurfaceCard {
+        Column(modifier = Modifier.padding(CardPadding)) {
+            Text(
+                text = stringResource(R.string.changelog_title),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            when (changelogState) {
+                ChangelogState.Idle -> Unit
+                ChangelogState.Loading -> Text(
+                    text = stringResource(R.string.changelog_loading),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                ChangelogState.Error -> Text(
+                    text = stringResource(R.string.changelog_failed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                is ChangelogState.Loaded -> if (changelogState.markdown.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.changelog_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                } else {
+                    MarkdownText(
+                        markdown = changelogState.markdown,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    if (showsInstallInfo) {
+        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = CardSpacing)) {
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(R.string.metered_warning_footnote),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp),
+            )
         }
     }
 }
@@ -293,7 +511,7 @@ private fun ColumnScope.UpdateProgress(progress: ProgressState) {
                 progress = { progress.percent / 100f },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 32.dp),
+                    .padding(top = 20.dp),
             )
             val caption = listOf(progress.downloadedSize, progress.eta)
                 .filter { it.isNotEmpty() }
@@ -314,7 +532,7 @@ private fun ColumnScope.UpdateProgress(progress: ProgressState) {
             LinearWavyProgressIndicator(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 32.dp),
+                    .padding(top = 20.dp),
             )
             Text(
                 text = stringResource(R.string.downloading_installing_caption),
@@ -375,21 +593,6 @@ private fun UpdateActionButtons(
 }
 
 @Composable
-private fun ScreenHeader(headline: String) {
-    Text(
-        text = headline,
-        style = MaterialTheme.typography.displaySmall,
-        fontFamily = DisplaySmallEmphasizedFontFamily,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(
-            start = HorizontalPadding,
-            top = 20.dp,
-            end = HorizontalPadding,
-        ),
-    )
-}
-
-@Composable
 private fun SystemUpdateTopBar(
     onBackClick: () -> Unit,
     showCheckAction: Boolean,
@@ -407,7 +610,7 @@ private fun SystemUpdateTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = HorizontalPadding, vertical = 8.dp),
+            .padding(horizontal = PagePadding, vertical = 8.dp),
     ) {
         FilledTonalIconButton(
             onClick = onBackClick,
@@ -422,15 +625,6 @@ private fun SystemUpdateTopBar(
                 contentDescription = stringResource(R.string.action_back),
             )
         }
-
-        Icon(
-            imageVector = SystemUpdateIcon,
-            contentDescription = null,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(IconSize),
-            tint = MaterialTheme.colorScheme.primary,
-        )
 
         Box(modifier = Modifier.align(Alignment.CenterEnd)) {
             FilledTonalIconButton(
@@ -527,56 +721,6 @@ private fun CheckForUpdateButton(
             )
         }
     }
-}
-
-@Composable
-private fun DeviceInfoText(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val locale = remember(context, configuration.locales) { StringUtil.getCurrentLocale(context) }
-    val securityPatch = remember(locale) {
-        runCatching {
-            StringUtil.formatSecurityPatchFullDate(context, DeviceInfoUtils.buildSecurityPatch)
-        }.getOrDefault(DeviceInfoUtils.buildSecurityPatch)
-    }
-
-    Column(modifier = modifier) {
-        InfoLine(stringResource(R.string.header_android_version_full, DeviceInfoUtils.androidVersion))
-        InfoLine(stringResource(R.string.header_security_update_full, securityPatch))
-    }
-}
-
-@Composable
-private fun LastCheckedText(
-    timestampMillis: Long,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    val dateText = remember(timestampMillis) {
-        val date = DateUtils.formatDateTime(
-            context,
-            timestampMillis,
-            DateUtils.FORMAT_SHOW_DATE or
-                    DateUtils.FORMAT_ABBREV_MONTH or
-                    DateUtils.FORMAT_NO_YEAR,
-        )
-        val time = DateFormat.getTimeFormat(context).format(Date(timestampMillis))
-        "$date ($time)"
-    }
-
-    Column(modifier = modifier) {
-        InfoLine(stringResource(R.string.header_last_check))
-        InfoLine(dateText)
-    }
-}
-
-@Composable
-private fun InfoLine(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
 }
 
 @UiModePreviews

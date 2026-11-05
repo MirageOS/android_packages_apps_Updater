@@ -18,6 +18,8 @@ object DeviceInfoUtils : SettingsLibDeviceInfoUtils() {
     private const val PROP_BUILD_TYPE = "net.pixelos.build_type"
     private const val PROP_BUILD_VERSION = "ro.custom.version"
     private const val PROP_DEVICE = "ro.custom.device"
+    private const val PROP_MAINTAINER = "ro.build.mirage.maintainer"
+    private const val PROP_OFFICIAL = "ro.build.mirage.official"
     private const val PROP_OTA_BRANCH = "net.pixelos.version"
     private const val PROP_UPDATE_RECOVERY = "persist.vendor.recovery_update"
 
@@ -36,6 +38,14 @@ object DeviceInfoUtils : SettingsLibDeviceInfoUtils() {
 
     @JvmStatic
     val device: String = SystemProperties.get(PROP_DEVICE)
+
+    /** Maintainer name from `MIRAGE_MAINTAINER`, same property the Settings About screen reads. */
+    @JvmStatic
+    val maintainer: String = SystemProperties.get(PROP_MAINTAINER, "").trim()
+
+    /** True on official builds (`IS_OFFICIAL := true`). */
+    @JvmStatic
+    val isOfficial: Boolean = SystemProperties.getBoolean(PROP_OFFICIAL, false)
 
     @JvmStatic
     val isABDevice: Boolean = SystemProperties.getBoolean(PROP_AB_DEVICE, false)
